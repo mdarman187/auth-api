@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 import datetime
 from functools import wraps
 import jwt
+import pandas
 
 
 app = Flask(__name__)
@@ -14,11 +15,26 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///auth-api.db'
 db = SQLAlchemy(app)
 
 class Users(db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  agencyid = db.Column(db.String(100)) 
-  agencyname = db.Column(db.String(50))
-  email = db.Column(db.String(50))
-  password = db.Column(db.String(80))
+    id = db.Column(db.Integer, primary_key=True)
+    agencyid = db.Column(db.String(100)) 
+    agencyname = db.Column(db.String(50))
+    email = db.Column(db.String(50))
+    password = db.Column(db.String(80))
+
+class Asset(db.Model):
+    __tablename__ = "picklist"
+    id = db.Column(db.Integer, primary_key=True)
+    picklistId = db.Column(db.Text)
+    optionId = db.Column(db.Integer)
+    minValue = db.Column(db.Float)
+    maxValue = db.Column(db.Float)
+    value = db.Column(db.Float)
+    status = db.Column(db.Text)
+    externalCode = db.Column(db.Text)
+    parentOptionId = db.Column(db.Integer)
+    en_US =db.Column(db.Text)
+    en_DEBUG =db.Column(db.Text)
+    en_GB =db.Column(db.Text)
 
 
 def token_required(f):
@@ -43,7 +59,7 @@ def token_required(f):
     return decorated
 
 
-@app.route('/forgetPassword')
+@app.route('/forgetpassword')
 def forgetPassword():
   print("redirect to forget password page")
   return redirect("https://www.google.com")
@@ -57,9 +73,6 @@ def login():
         return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
 
     user = Users.query.filter_by(agencyid=auth.username).first()
-
-    if not user:
-        return redirect(url_for('signup'))
 
     if user.password == auth.password:
         token = jwt.encode({'agencyid' : user.agencyid, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, app.config['SECRET_KEY'])
@@ -80,14 +93,24 @@ def signup():
   return jsonify({'message' : 'Signup Successful!'})
 
 
-@app.route('/register')
-def register():
-  return jsonify({'message' : 'Registration Successful!'})
+@app.route('/import-picklist')
+def importPicklist():
+    engine = db.get_engine()
+    csv_file_path = 'picklist.csv'
+
+# Read CSV with Pandas
+    with open(csv_file_path, 'r') as file:
+        df = pd.read_csv(file)
+
+# Insert to DB
+    df.to_sql('picklist',con=engine,index=False,index_label='id',if_exists='replace')
+
+    return jsonify({'message' : 'imported Successful!'})
 
 
-@app.route('/resetPassword', methods=['PUT'])
+@app.route('/resetpassword', methods=['PUT'])
 @token_required
-def resetPassword(current_user):
+def resetpassword(current_user):
     resetuser = Users.query.filter_by(agencyid=current_user.agencyid).first()
 
     if not resetuser:
